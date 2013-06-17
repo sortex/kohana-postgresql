@@ -11,7 +11,15 @@
 class Kohana_Database_PostgreSQL extends Database
 {
 	protected $_version;
+	protected $_converters    = [];
+	protected $_handled_types = [];
 
+	/**
+	 * CTOR
+	 *
+	 * @param  string  $name
+	 * @param  array   $config
+	 */
 	public function __construct($name, array $config)
 	{
 		parent::__construct($name, $config);
@@ -66,8 +74,13 @@ class Kohana_Database_PostgreSQL extends Database
 
 			$this->_config['connection']['info'] = $info;
 		}
+
+		$this->register_base_converters();
 	}
 
+	/**
+	 * @throws Database_Exception
+	 */
 	public function connect()
 	{
 		if ($this->_connection)
@@ -112,6 +125,9 @@ class Kohana_Database_PostgreSQL extends Database
 		}
 	}
 
+	/**
+	 * @return bool
+	 */
 	public function disconnect()
 	{
 		if ( ! $status = ! is_resource($this->_connection))
@@ -125,6 +141,10 @@ class Kohana_Database_PostgreSQL extends Database
 		return $status;
 	}
 
+	/**
+	 * @param  string  $charset
+	 * @throws Database_Exception
+	 */
 	public function set_charset($charset)
 	{
 		$this->_connection OR $this->connect();
@@ -138,6 +158,7 @@ class Kohana_Database_PostgreSQL extends Database
 	 *
 	 * @param   string  $sql    SQL command
 	 * @return  boolean
+	 * @throws  Database_Exception
 	 */
 	protected function _command($sql)
 	{
@@ -152,6 +173,14 @@ class Kohana_Database_PostgreSQL extends Database
 		return (pg_result_status($result) === PGSQL_COMMAND_OK);
 	}
 
+	/**
+	 * @param  int     $type
+	 * @param  string  $sql
+	 * @param  bool    $as_object
+	 * @param  array   $params
+	 * @return array|Database_PostgreSQL_Result|int|object
+	 * @throws Exception
+	 */
 	public function query($type, $sql, $as_object = FALSE, array $params = NULL)
 	{
 		$this->_connection OR $this->connect();
@@ -261,6 +290,9 @@ class Kohana_Database_PostgreSQL extends Database
 		return $this->_command("BEGIN $mode");
 	}
 
+	/**
+	 * @return bool
+	 */
 	public function commit()
 	{
 		return $this->_command('COMMIT');
@@ -290,6 +322,8 @@ class Kohana_Database_PostgreSQL extends Database
 
 	/**
 	 * @link http://www.postgresql.org/docs/current/static/datatype.html#DATATYPE-TABLE
+	 * @param  string  $type
+	 * @return array
 	 */
 	public function datatype($type)
 	{
@@ -326,6 +360,10 @@ class Kohana_Database_PostgreSQL extends Database
 		return parent::datatype($type);
 	}
 
+	/**
+	 * @param  string  $like
+	 * @return array
+	 */
 	public function list_tables($like = NULL)
 	{
 		$this->_connection OR $this->connect();
@@ -340,6 +378,12 @@ class Kohana_Database_PostgreSQL extends Database
 		return $this->query(Database::SELECT, $sql, FALSE)->as_array(NULL, 'table_name');
 	}
 
+	/**
+	 * @param  string  $table
+	 * @param  string  $like
+	 * @param  bool    $add_prefix
+	 * @return array
+	 */
 	public function list_columns($table, $like = NULL, $add_prefix = TRUE)
 	{
 		$this->_connection OR $this->connect();
@@ -370,11 +414,18 @@ class Kohana_Database_PostgreSQL extends Database
 		return $result;
 	}
 
+	/**
+	 * @return string
+	 */
 	public function schema()
 	{
 		return $this->_config['schema'];
 	}
 
+	/**
+	 * @param  string  $value
+	 * @return string
+	 */
 	public function escape($value)
 	{
 		$this->_connection OR $this->connect();
@@ -383,4 +434,99 @@ class Kohana_Database_PostgreSQL extends Database
 
 		return "'$value'";
 	}
-}
+
+	/**
+	 * Register a new converter
+	 *
+	 * @param  string                                   $name       The name of the converter
+	 * @param  Database_PostgreSQL_Converter_Interface  $converter  A converter instance
+	 * @param  array                                    $pg_types   An array of the mapped postgresql's types
+	 * @return Database_PostgreSQL
+	 */
+	public function register_converter(
+		$name,
+		Database_PostgreSQL_Converter_Interface $converter,
+		array $pg_types
+	)
+	{
+		$this->_converters[$name] = $converter;
+
+		foreach ($pg_types as $type)
+		{
+			$this->_handled_types[$type] = $name;
+		}
+
+		return $this;
+	}
+
+	/**
+	 * Returns a converter from its designation.
+	 *
+	 * @param  string  $name  Converter designation
+	 * @return Database_PostgreSQL_Converter_Interface
+	 */
+	public function get_converter_for($name)
+	{
+		return $this->_converters[$name];
+	}
+
+	/**
+	 * Returns the converter instance for a given a PostgreSQL's type
+	 *
+	 * @param   string  $pg_type Type name
+	 * @return  Database_PostgreSQL_Converter_Interface
+	 * @throws  Database_Exception
+	 */
+	public function get_converter_for_type($pg_type)
+	{
+		if (isset($this->_handled_types[$pg_type]))
+		{
+			$converter_name = $this->_handled_types[$pg_type];
+
+			if (isset($this->_converters[$converter_name]))
+			{
+				return $this->_converters[$converter_name];
+			}
+			else
+			{
+				throw new Database_Exception(sprintf(
+					"Pg type '%s' is associated with converter '%s' but converter is not registered.", $pg_type, $converter_name
+				));
+			}
+		}
+
+		throw new Database_Exception(sprintf("Could not find a converter for type '%s'.", $pg_type));
+	}
+
+	/**
+	 * Associate an existing converter with a Pg type.
+	 * This is useful for DOMAINs.
+	 *
+	 * @param  string  $type            Type name
+	 * @param  string  $converter_name  Converter designation.
+	 * @return Database_PostgreSQL
+	 */
+	public function register_type_for_converter($type, $converter_name)
+	{
+		$this->_handled_types[$type] = $converter_name;
+
+		return $this;
+	}
+
+	/**
+	 * Register the converters for PostgreSQL's built-in types
+	 */
+	protected function register_base_converters()
+	{
+		$this->register_converter('Array', new Database_PostgreSQL_Converter_Array($this), []);
+		$this->register_converter('Boolean', new Database_PostgreSQL_Converter_Boolean, ['bool']);
+		$this->register_converter('Number', new Database_PostgreSQL_Converter_Number, ['int2', 'int4', 'int8', 'numeric', 'float4', 'float8']);
+		$this->register_converter('String', new Database_PostgreSQL_Converter_String, ['varchar', 'char', 'text', 'uuid', 'tsvector', 'xml', 'bpchar', 'json', 'name']);
+		$this->register_converter('Timestamp', new Database_PostgreSQL_Converter_Timestamp, ['timestamp', 'date', 'time']);
+		$this->register_converter('Interval', new Database_PostgreSQL_Converter_Interval, ['interval']);
+		$this->register_converter('Binary', new Database_PostgreSQL_Converter_Bytea, ['bytea']);
+		$this->register_converter('NumberRange', new Database_PostgreSQL_Converter_NumberRange, ['int4range', 'int8range', 'numrange']);
+		$this->register_converter('TsRange', new Database_PostgreSQL_Converter_TsRange, ['tsrange', 'daterange']);
+	}
+
+} // End Kohana_Database_PostgreSQL
