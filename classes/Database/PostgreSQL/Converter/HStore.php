@@ -38,7 +38,7 @@ class Database_PostgreSQL_Converter_HStore implements Database_PostgreSQL_Conver
 		if ( ! is_array($data))
 		{
 			throw new Database_Exception(sprintf(
-				"HStore::toPg takes an associative array as parameter ('%s' given).", gettype($data)
+				"HStore::to_pg takes an associative array as parameter ('%s' given).", gettype($data)
 			));
 		}
 

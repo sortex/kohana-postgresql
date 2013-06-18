@@ -15,12 +15,7 @@ class Database_PostgreSQL_Converter_String implements Database_PostgreSQL_Conver
 	 */
 	public function to_pg($data, $type = NULL)
 	{
-		$data = str_replace("'", "''", $data);
-		$data = str_replace("\\", "\\\\", $data);
-		$type = is_null($type) ? '' : sprintf("%s ", $type);
-		$data = sprintf("%s'%s'", $type, $data);
-
-		return $data;
+		return (string) $data;
 	}
 
 	/**
@@ -28,7 +23,7 @@ class Database_PostgreSQL_Converter_String implements Database_PostgreSQL_Conver
 	 */
 	public function from_pg($data, $type = NULL)
 	{
-		return str_replace('\\"', '"', $data);
+		return (string) $data;
 	}
 
 } // End Database_PostgreSQL_Converter_String

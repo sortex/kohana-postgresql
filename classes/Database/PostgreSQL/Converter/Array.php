@@ -62,23 +62,25 @@ class Database_PostgreSQL_Converter_Array implements Database_PostgreSQL_Convert
 		{
 			if (is_null($data))
 			{
-				return 'NULL';
+				return NULL;
 			}
 
-			throw new Database_Exception(sprintf("Array converter toPg() data must be an array ('%s' given).", gettype($data)));
+			throw new Database_Exception(sprintf("Array converter to_pg() data must be an array ('%s' given).", gettype($data)));
 		}
 
 		$converter = $this->database->get_converter_for_type($type);
 
 		return sprintf(
-			'ARRAY[%s]::%s[]', join(
-				',', array_map(
+			'{%s}',
+			join(
+				',',
+				array_map(
 					function ($val) use ($converter, $type)
 					{
-						return ! is_null($val) ? $converter->to_pg($val, $type) : 'NULL';
+						return ! is_null($val) ? $converter->to_pg($val, $type) : NULL;
 					}, $data
 				)
-			), $type
+			)
 		);
 	}
 
