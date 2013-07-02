@@ -521,7 +521,8 @@ class Kohana_Database_PostgreSQL extends Database
 		$this->register_converter('Array', new Database_PostgreSQL_Converter_Array($this), []);
 		$this->register_converter('Boolean', new Database_PostgreSQL_Converter_Boolean, ['bool']);
 		$this->register_converter('Number', new Database_PostgreSQL_Converter_Number, ['int2', 'int4', 'int8', 'numeric', 'float4', 'float8']);
-		$this->register_converter('String', new Database_PostgreSQL_Converter_String, ['varchar', 'char', 'text', 'uuid', 'tsvector', 'xml', 'bpchar', 'json', 'name']);
+		$this->register_converter('String', new Database_PostgreSQL_Converter_String, ['varchar', 'char', 'text', 'uuid', 'tsvector', 'xml', 'bpchar', 'name']);
+		$this->register_converter('Json', new Database_PostgreSQL_Converter_Json, ['json']);
 		$this->register_converter('Timestamp', new Database_PostgreSQL_Converter_Timestamp, ['timestamp', 'date', 'time']);
 		$this->register_converter('Interval', new Database_PostgreSQL_Converter_Interval, ['interval']);
 		$this->register_converter('Binary', new Database_PostgreSQL_Converter_Bytea, ['bytea']);
